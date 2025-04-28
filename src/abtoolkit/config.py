@@ -67,12 +67,17 @@ class Source(str, Enum):
         return self._ds().link
 
     @classmethod
-    def print_catalog(cls) -> None:
-        header = f'{"Key":<15} {"Path":<35} {"Description":<52} Link'
-        print(header)
-        print('-' * len(header))
+    def print_catalog(cls) -> None:  # noqa: D401
+        """Print each data source in a multi‑line compact form."""
         for member in cls:
-            print(member._ds().as_row(member.name.lower()))
+            ds = member._ds()
+            print(f"{member.name.lower()}:")
+            print(f"  path: {ds.path}")
+            if ds.description:
+                print(f"  desc: {ds.description}")
+            if ds.link:
+                print(f"  link: {ds.link}")
+            print()
 
 # ---------------------------------------------------------------------------
 # Research‑specific configuration
