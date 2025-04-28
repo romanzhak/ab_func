@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import Dict, Any
-from datasources import REFERENCE_SOURCES, DataSource
+from .datasources import REFERENCE_SOURCES, DataSource
 
 
 class Platform(str, Enum):
