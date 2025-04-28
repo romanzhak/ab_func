@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ab_func"               # замените на фактическое имя пакета
+name = "abtoolkit"               # замените на фактическое имя пакета
 version = "0.1.0"
 description = "Набор утилит для работы с данными"
 readme = "README.md"
@@ -17,6 +17,6 @@ dependencies = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["ab"]
+packages = ["abtoolkit"]
 
 [tool.setuptools.package-data]
