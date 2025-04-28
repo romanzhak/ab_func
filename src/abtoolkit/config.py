@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Dict, Any
 from .datasources import REFERENCE_SOURCES, DataSource
 
+version = '0.1.0'
 
 class Platform(str, Enum):
     '''
