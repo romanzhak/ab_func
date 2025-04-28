@@ -51,7 +51,7 @@ class Source(str, Enum):
             return REFERENCE_SOURCES[self.value]
         except KeyError as exc:
             raise KeyError(
-                f'DataSource "{self.value}" missing in _REFERENCE_SOURCES registry'
+                f'DataSource "{self.value}" missing in REFERENCE_SOURCES registry'
             ) from exc
 
     @property
@@ -67,7 +67,7 @@ class Source(str, Enum):
         return self._ds().link
 
     @classmethod
-    def print_catalog(cls) -> None:  # noqa: D401
+    def print_catalog(cls) -> None:
         """Print each data source in a multi‑line compact form."""
         for member in cls:
             ds = member._ds()
