@@ -5,7 +5,7 @@ from typing import Dict, Any
 @dataclass(frozen=True, slots=True)
 class DataSource:
     '''
-      Meta‑information about a table or view used in experiments
+      Meta‑information about tables used in experiments
     '''
 
     path: str

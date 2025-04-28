@@ -111,6 +111,5 @@ class ResearchConfig:
 __all__ = [
     'Platform',
     'Source',
-    'DataSource',
     'ResearchConfig',
 ]
