@@ -1,5 +1,6 @@
 from ..config import ResearchConfig, Source
 import pyspark.sql.functions as F
+from databricks.sdk.runtime import spark
 
 def verify_ab_exp(cfg: ResearchConfig) -> None:
   ab_test_users = spark.table(Source.AB_USERS.path)
