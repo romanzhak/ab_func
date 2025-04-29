@@ -20,4 +20,5 @@ def verify_ab_exp(cfg: ResearchConfig) -> None:
     )
     .distinct()
   )
+  cfg.ingest_dates(test_info)
   test_info.display()
