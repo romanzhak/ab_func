@@ -1,8 +1,11 @@
 from ..config import ResearchConfig, Source
-import pyspark.sql.functions as F
 from databricks.sdk.runtime import spark
+import pyspark.sql.functions as F
 
 def verify_ab_exp(cfg: ResearchConfig) -> None:
+  '''
+   Checking whether there is a test in the data mart
+  '''
   ab_test_users = spark.table(Source.AB_USERS.path)
   ab_users = ab_test_users.filter((F.col('test_id') == cfg.test_id) & (F.col('app_short') == cfg.app_short))
   test_info = (
