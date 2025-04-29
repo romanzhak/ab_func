@@ -17,9 +17,9 @@ def verify_ab_exp(cfg: ResearchConfig) -> None:
   }
   test_info = (
     ab_users.select(
-         *required,
         'test_id',
         'app_short',
+        *required,
     )
     .distinct()
   )
