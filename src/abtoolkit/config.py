@@ -8,7 +8,7 @@ names consistent.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Any
 from .datasources import REFERENCE_SOURCES, DataSource
