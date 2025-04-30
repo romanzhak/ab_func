@@ -1,4 +1,3 @@
-
 from .datasources import REFERENCE_SOURCES, DataSource
 from enum import Enum
 
