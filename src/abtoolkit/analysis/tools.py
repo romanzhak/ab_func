@@ -1,4 +1,5 @@
-from ..config import ResearchConfig, Source
+from ..config import ResearchConfig
+from ..data.tools import Source
 from databricks.sdk.runtime import spark
 import pyspark.sql.functions as F
 

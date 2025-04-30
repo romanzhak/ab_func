@@ -11,9 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Any
-from .datasources import REFERENCE_SOURCES, DataSource
 
-version = '0.1.0'
 
 class Platform(str, Enum):
     """
@@ -33,53 +31,6 @@ class Platform(str, Enum):
     def store(self) -> str:
         """Return canonical store identifier"""
         return 'ios' if self is Platform.IOS else 'googleplay'
-
-
-class Source(str, Enum):
-    """
-    Canonical data sources.
-
-    Example
-    -------
-    >>> from abtoolkit.config import Source
-    >>> Source.EVENTS.path
-    """
-
-    AB_USERS = 'ab_users'
-    AB_USERS_METRICS = 'ab_users_metrics'
-
-    def _ds(self) -> DataSource:
-        try:
-            return REFERENCE_SOURCES[self.value]
-        except KeyError as exc:
-            raise KeyError(
-                f'DataSource "{self.value}" missing in REFERENCE_SOURCES registry'
-            ) from exc
-
-    @property
-    def path(self) -> str:
-        return self._ds().path
-
-    @property
-    def description(self) -> str:
-        return self._ds().description
-
-    @property
-    def link(self) -> str:
-        return self._ds().link
-
-    @classmethod
-    def print_catalog(cls) -> None:
-        """Print each data source in a multi‑line compact form."""
-        for member in cls:
-            ds = member._ds()
-            print(f'{member.name.lower()}:')
-            print(f'  path: {ds.path}')
-            if ds.description:
-                print(f'  desc: {ds.description}')
-            if ds.link:
-                print(f'  link: {ds.link}')
-            print()
 
 # ---------------------------------------------------------------------------
 # Research‑specific configuration
@@ -116,7 +67,10 @@ class ResearchConfig:
             f'{self.test_id}_{self.app_short}'
         )
     
-    # special
+    @property
+    def filename_attempts(self) -> str:
+         return f'game_data_prod.temp.hs_{self.your_name}_abtests_m3attempts_{self.test_id}'
+    
     def add_meta(self, key: str, value: Any, *, overwrite: bool = True) -> None:
         """Save *value* in :pyattr:`meta` under *key*.
 
@@ -154,6 +108,5 @@ class ResearchConfig:
 
 __all__ = [
     'Platform',
-    'Source',
     'ResearchConfig',
 ]
