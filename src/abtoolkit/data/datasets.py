@@ -19,163 +19,246 @@ def calc_attempts(
     start_date: date,
     end_date: date,
     users: DataFrame,
-    filename_attempts: str,
 ) -> None:
-  """
+    """
     Функция считает данные по попыткам и записывает их в файл
     на вход нужно передать даты, таблицу с пользователями и путь для сохранения
     таблица с пользователями users: event_user, start_feature_user (первый день юзера в тесте с влиянием), abgroup
-  """
-
-  # Вычисляем разницу в днях между двумя датами чтобы записывать итеративно по дню
-  days_between = (end_date - start_date).days
-
-  windowUserAsc = Window.partitionBy('event_user').orderBy('client_time')
-  pre_boosters = col("boosts_aircraft") + col("unlimited_boosts_aircraft") + col("boosts_bomb_rocket") + col("unlimited_boosts_bomb_rocket") + col("boosts_lightning") + col("unlimited_boosts_lightning")
-  in_boosters = col("boosts_hammer") + col("boosts_swap") + col("boosts_reshuffle") + col("boosts_vertical_line") + col("boosts_horizontal_line")
-  
-  print('Attempts will be save in file: ', cfg.filename_attempts)
-
-  for i in range(0, days_between + 1):
-    date_i = start_date + datetime.timedelta(days=i)
-    date_i_str = date_i.strftime('%Y-%m-%d')
-    print('Calculating attempts: DAY', i, ' FROM ', days_between, date_i_str)
-    levels_filtered = all_levels.filter((F.col("partition_date").between(date_i_str, date_i_str))).withColumnRenamed('user_id', 'event_user')
-
-    df_attempts = (
-        users
-        .join(levels_filtered,["event_user"],"inner")
-        .withColumn("n_day", F.datediff(col("partition_date"),col("start_feature_user"))+1)
-        .withColumn("coins_spent", F.get_json_object("event_payload", "$.coins_spent"))
-        .withColumn("coins_spent_additional_moves", F.get_json_object("event_payload", "$.coins_spent_additional_moves"))
-        .withColumn("coins_spent_inlevelboosters", F.get_json_object("event_payload", "$.coins_spent_inlevelboosters"))
-        .withColumn("coins_spent_startboosters", F.get_json_object("event_payload", "$.coins_spent_startboosters"))
-        .withColumn("real_coins_spent", F.get_json_object("event_payload", "$.real_coins_spent"))
-        .withColumn("real_coins_spent_additional_moves", F.get_json_object("event_payload", "$.real_coins_spent_additional_moves"))
-        .withColumn("real_coins_spent_inlevelboosters", F.get_json_object("event_payload", "$.real_coins_spent_inlevelboosters"))
-        .withColumn("real_coins_spent_startboosters", F.get_json_object("event_payload", "$.real_coins_spent_startboosters"))
-        .withColumn('boosts_aircraft', when(F.get_json_object("event_payload", "$.boosts_aircraft") == True, 1).otherwise(0))
-        .withColumn('boosts_bomb_rocket', when(F.get_json_object("event_payload", "$.boosts_bomb_rocket") == True, 1).otherwise(0))
-        .withColumn('boosts_lightning', when(F.get_json_object("event_payload", "$.boosts_lightning") == True, 1).otherwise(0))
-        .withColumn('unlimited_boosts_aircraft', when(F.get_json_object("event_payload", "$.unlimited_boosts_aircraft") == True, 1).otherwise(0))
-        .withColumn('unlimited_boosts_bomb_rocket', when(F.get_json_object("event_payload", "$.unlimited_boosts_bomb_rocket") == True, 1).otherwise(0))
-        .withColumn('unlimited_boosts_lightning', when(F.get_json_object("event_payload", "$.unlimited_boosts_lightning") == True, 1).otherwise(0))
-        .withColumn('boosts_hammer', F.get_json_object("event_payload", "$.boosts_hammer"))
-        .withColumn('boosts_swap', F.get_json_object("event_payload", "$.boosts_swap"))
-        .withColumn('boosts_reshuffle', F.get_json_object("event_payload", "$.boosts_reshuffle"))
-        .withColumn('boosts_vertical_line', F.get_json_object("event_payload", "$.boosts_vertical_line"))
-        .withColumn('boosts_horizontal_line', F.get_json_object("event_payload", "$.boosts_horizontal_line"))
-        .withColumn('pre_boosters', pre_boosters)
-        .withColumn('in_boosters', in_boosters)
-        .withColumn('mortas_helmets', F.get_json_object("event_payload", "$.mortas_helmets"))
-        .withColumn('is_streak', when(col('mortas_helmets') == 3, 1).otherwise(0))
-        .withColumn('influence', when(col('influence') == True, 1).otherwise(0))
-        .withColumn('is_win', when(col('reason') == 'completed', 1).otherwise(0))
-        .withColumn('is_lose', 1-col('is_win'))
-        .withColumn('is_superball', when(F.get_json_object("event_payload", "$.boosts_super_lightning") == True, 1).otherwise(0))
-        .withColumn('coins_spent_1att', F.when(col('attempt') == 1, col('coins_spent')).otherwise(0))
-        .withColumn('coins_spent_2plus_att', F.when(col('attempt') > 1, col('coins_spent')).otherwise(0))
-        .withColumn('coins_spent_superball', F.when(col('is_superball') == 1, col('coins_spent')).otherwise(0))
-        .withColumn('real_coins_spent_1att', F.when(col('attempt') == 1, col('real_coins_spent')).otherwise(0))
-        .withColumn('real_coins_spent_2plus_att', F.when(col('attempt') > 1, col('real_coins_spent')).otherwise(0))
-        .withColumn('real_coins_spent_superball', F.when(col('is_superball') == 1, col('real_coins_spent')).otherwise(0))
-        .withColumn('levels_winstreak', F.get_json_object("event_payload", "$.levels_winstreak"))
-        .withColumn('levels_sb_streak', F.get_json_object("event_payload", "$.levels_sb_streak"))
-        .select("event_user", "abgroup", "n_day", col("partition_date").alias("date_attempt"), "start_feature_user", "client_time",  "level", "complexity",  "attempt", "reason", "coins_spent", "coins_spent_additional_moves", "coins_spent_inlevelboosters", "coins_spent_startboosters", "real_coins_spent", "real_coins_spent_additional_moves", "real_coins_spent_inlevelboosters", "real_coins_spent_startboosters", "pre_boosters", "in_boosters", "mortas_helmets", "is_streak", "influence", "is_win", "is_lose", "is_superball", "coins_spent_1att", "coins_spent_2plus_att", "coins_spent_superball", "real_coins_spent_1att", "real_coins_spent_2plus_att", "real_coins_spent_superball", "levels_winstreak", "levels_sb_streak")  
-        .filter(col("n_day")>0)
-        )
-    df_attempts.write.mode("append").saveAsTable(filename_attempts)
-  print('CALCULATING ATTEMPTS FINISHED', filename_attempts)
-
-
-def get_cum_metric(user_days_df, metric):
-  """
-  Функция добавляет колонку с кумулятивными значениями метрики по дням для каждого игрока
-  """
-
-  windowCumUserDay  = Window.partitionBy('event_user').orderBy('n_day').rowsBetween(Window.unboundedPreceding, Window.currentRow)
-  if metric in ['churn_m3', 'churn_m3_win', 'churn_m3_lose', 'is_5plus_ws', 'is_10plus_ws', 'is_20plus_ws', 'is_40plus_ws', 'is_lose_sb', 'is_get_sb', 'is_stucked', 'is_super_stucked', 'is_streak', 'is_superball']:
-    df = (
-      user_days_df
-      .withColumn('cum_user_'+metric, F.max(metric).over(windowCumUserDay))
-    )
-  else:
-    df = (
-      user_days_df
-      .withColumn('cum_user_'+metric, F.sum(metric).over(windowCumUserDay))
-    )
-  return df
-
-
-def calc_m3_metrics(start_date, end_date, users, need_calc_attempts, filename_attempts):
     """
-    Функция возращает дф с м3 метриками
+
+    # Вычисляем разницу в днях между двумя датами чтобы записывать итеративно по дню
+    days_between = (end_date - start_date).days
+
+    windowUserAsc = Window.partitionBy('event_user').orderBy('client_time')
+    pre_boosters = (
+        col('boosts_aircraft')
+        + col('unlimited_boosts_aircraft')
+        + col('boosts_bomb_rocket')
+        + col('unlimited_boosts_bomb_rocket')
+        + col('boosts_lightning')
+        + col('unlimited_boosts_lightning')
+    )
+    in_boosters = (
+        col('boosts_hammer')
+        + col('boosts_swap')
+        + col('boosts_reshuffle')
+        + col('boosts_vertical_line')
+        + col('boosts_horizontal_line')
+    )
+
+    print('Attempts will be save in file: ', cfg.filename_attempts)
+
+    for i in range(0, days_between + 1):
+        date_i = start_date + datetime.timedelta(days=i)
+        date_i_str = date_i.strftime('%Y-%m-%d')
+        print('Calculating attempts: DAY', i, ' FROM ', days_between, date_i_str)
+        levels_filtered = all_levels.filter((F.col('partition_date').between(date_i_str, date_i_str))).withColumnRenamed(
+            'user_id', 'event_user'
+        )
+
+        df_attempts = (
+            users.join(levels_filtered, ['event_user'], 'inner')
+            .withColumn('n_day', F.datediff(col('partition_date'), col('start_feature_user')) + 1)
+            .withColumn('coins_spent', F.get_json_object('event_payload', '$.coins_spent'))
+            .withColumn('coins_spent_additional_moves', F.get_json_object('event_payload', '$.coins_spent_additional_moves'))
+            .withColumn('coins_spent_inlevelboosters', F.get_json_object('event_payload', '$.coins_spent_inlevelboosters'))
+            .withColumn('coins_spent_startboosters', F.get_json_object('event_payload', '$.coins_spent_startboosters'))
+            .withColumn('real_coins_spent', F.get_json_object('event_payload', '$.real_coins_spent'))
+            .withColumn(
+                'real_coins_spent_additional_moves', F.get_json_object('event_payload', '$.real_coins_spent_additional_moves')
+            )
+            .withColumn(
+                'real_coins_spent_inlevelboosters', F.get_json_object('event_payload', '$.real_coins_spent_inlevelboosters')
+            )
+            .withColumn('real_coins_spent_startboosters', F.get_json_object('event_payload', '$.real_coins_spent_startboosters'))
+            .withColumn('boosts_aircraft', when(F.get_json_object('event_payload', '$.boosts_aircraft') == True, 1).otherwise(0))
+            .withColumn(
+                'boosts_bomb_rocket', when(F.get_json_object('event_payload', '$.boosts_bomb_rocket') == True, 1).otherwise(0)
+            )
+            .withColumn(
+                'boosts_lightning', when(F.get_json_object('event_payload', '$.boosts_lightning') == True, 1).otherwise(0)
+            )
+            .withColumn(
+                'unlimited_boosts_aircraft',
+                when(F.get_json_object('event_payload', '$.unlimited_boosts_aircraft') == True, 1).otherwise(0),
+            )
+            .withColumn(
+                'unlimited_boosts_bomb_rocket',
+                when(F.get_json_object('event_payload', '$.unlimited_boosts_bomb_rocket') == True, 1).otherwise(0),
+            )
+            .withColumn(
+                'unlimited_boosts_lightning',
+                when(F.get_json_object('event_payload', '$.unlimited_boosts_lightning') == True, 1).otherwise(0),
+            )
+            .withColumn('boosts_hammer', F.get_json_object('event_payload', '$.boosts_hammer'))
+            .withColumn('boosts_swap', F.get_json_object('event_payload', '$.boosts_swap'))
+            .withColumn('boosts_reshuffle', F.get_json_object('event_payload', '$.boosts_reshuffle'))
+            .withColumn('boosts_vertical_line', F.get_json_object('event_payload', '$.boosts_vertical_line'))
+            .withColumn('boosts_horizontal_line', F.get_json_object('event_payload', '$.boosts_horizontal_line'))
+            .withColumn('pre_boosters', pre_boosters)
+            .withColumn('in_boosters', in_boosters)
+            .withColumn('mortas_helmets', F.get_json_object('event_payload', '$.mortas_helmets'))
+            .withColumn('is_streak', when(col('mortas_helmets') == 3, 1).otherwise(0))
+            .withColumn('influence', when(col('influence') == True, 1).otherwise(0))
+            .withColumn('is_win', when(col('reason') == 'completed', 1).otherwise(0))
+            .withColumn('is_lose', 1 - col('is_win'))
+            .withColumn(
+                'is_superball', when(F.get_json_object('event_payload', '$.boosts_super_lightning') == True, 1).otherwise(0)
+            )
+            .withColumn('coins_spent_1att', F.when(col('attempt') == 1, col('coins_spent')).otherwise(0))
+            .withColumn('coins_spent_2plus_att', F.when(col('attempt') > 1, col('coins_spent')).otherwise(0))
+            .withColumn('coins_spent_superball', F.when(col('is_superball') == 1, col('coins_spent')).otherwise(0))
+            .withColumn('real_coins_spent_1att', F.when(col('attempt') == 1, col('real_coins_spent')).otherwise(0))
+            .withColumn('real_coins_spent_2plus_att', F.when(col('attempt') > 1, col('real_coins_spent')).otherwise(0))
+            .withColumn('real_coins_spent_superball', F.when(col('is_superball') == 1, col('real_coins_spent')).otherwise(0))
+            .withColumn('levels_winstreak', F.get_json_object('event_payload', '$.levels_winstreak'))
+            .withColumn('levels_sb_streak', F.get_json_object('event_payload', '$.levels_sb_streak'))
+            .select(
+                'event_user',
+                'abgroup',
+                'n_day',
+                col('partition_date').alias('date_attempt'),
+                'start_feature_user',
+                'client_time',
+                'level',
+                'complexity',
+                'attempt',
+                'reason',
+                'coins_spent',
+                'coins_spent_additional_moves',
+                'coins_spent_inlevelboosters',
+                'coins_spent_startboosters',
+                'real_coins_spent',
+                'real_coins_spent_additional_moves',
+                'real_coins_spent_inlevelboosters',
+                'real_coins_spent_startboosters',
+                'pre_boosters',
+                'in_boosters',
+                'mortas_helmets',
+                'is_streak',
+                'influence',
+                'is_win',
+                'is_lose',
+                'is_superball',
+                'coins_spent_1att',
+                'coins_spent_2plus_att',
+                'coins_spent_superball',
+                'real_coins_spent_1att',
+                'real_coins_spent_2plus_att',
+                'real_coins_spent_superball',
+                'levels_winstreak',
+                'levels_sb_streak',
+            )
+            .filter(col('n_day') > 0)
+        )
+        df_attempts.write.mode('append').saveAsTable(cfg.filename_attempts)
+    print('CALCULATING ATTEMPTS FINISHED', cfg.filename_attempts)
+
+
+def get_cum_metric(user_days_df: DataFrame, metric: str) -> DataFrame:
+    """
+    Функция добавляет колонку с кумулятивными значениями метрики по дням для каждого игрока
+    """
+
+    windowCumUserDay = Window.partitionBy('event_user').orderBy('n_day').rowsBetween(Window.unboundedPreceding, Window.currentRow)
+    if metric in [
+        'churn_m3',
+        'churn_m3_win',
+        'churn_m3_lose',
+        'is_5plus_ws',
+        'is_10plus_ws',
+        'is_20plus_ws',
+        'is_40plus_ws',
+        'is_lose_sb',
+        'is_get_sb',
+        'is_stucked',
+        'is_super_stucked',
+        'is_streak',
+        'is_superball',
+    ]:
+        df = user_days_df.withColumn('cum_user_' + metric, F.max(metric).over(windowCumUserDay))
+    else:
+        df = user_days_df.withColumn('cum_user_' + metric, F.sum(metric).over(windowCumUserDay))
+    return df
+
+def calc_m3_metrics(
+        cfg: ResearchConfig, 
+        start_date: date, 
+        end_date: date, 
+        users: DataFrame, 
+        need_calc_attempts: bool
+) -> DataFrame:
+    """
+    Функция возращает DataFrame с м3 метриками
     на вход нужно передать даты, таблицу с пользователями, флаг нужно ли считать попытки, путь для сохранения
     таблица с пользователями users: event_user, start_feature_user (первый день юзера в тесте с влиянием), abgroup
     """
+
     if need_calc_attempts:
-        calc_attempts(start_date, end_date, users, filename_attempts)
+        calc_attempts(start_date, end_date, users, cfg.filename_attempts)
 
     # считаем метрики с группировкой по USER, DAY
     windowUserAsc = Window.partitionBy('event_user').orderBy('client_time')
 
-    atts = spark.table(filename_attempts)
+    atts = spark.table(cfg.filename_attempts)
     df_level_user_day_metrics = (
-            atts
-            .withColumn('next_att_time', F.lead('client_time').over(windowUserAsc))
-            .withColumn('timediff_att', F.datediff(col('next_att_time'),col('client_time'))) 
-            .withColumn('churn_m3', when((col('timediff_att')<7) | (col('date_attempt') > end_date - datetime.timedelta(days=7)), 0).otherwise(1))
-            .withColumn('churn_m3_win', when(col('is_win')==1, col('churn_m3')).otherwise(0))
-            .withColumn('churn_m3_lose', when(col('is_win')==0, col('churn_m3')).otherwise(0))
-            .withColumn('prev_levels_winstreak', F.lag('levels_winstreak').over(windowUserAsc)) 
-            .fillna({'prev_levels_winstreak': 0})
-            .withColumn('is_5plus_ws', when(col('prev_levels_winstreak')>4, 1).otherwise(0))
-            .withColumn('is_10plus_ws', when(col('prev_levels_winstreak')>9, 1).otherwise(0))
-            .withColumn('is_20plus_ws', when(col('prev_levels_winstreak')>19, 1).otherwise(0))
-            .withColumn('is_40plus_ws', when(col('prev_levels_winstreak')>39, 1).otherwise(0))
-            .withColumn('is_next_sb', F.lead('is_superball').over(windowUserAsc)) 
-            .withColumn('is_lose_sb', when(col('is_superball')==1, col('is_lose')).otherwise(0))
-            .withColumn('is_get_sb', when((col('is_superball')==0) & (col('is_next_sb')==1), F.lit(1)).otherwise(0))
-            .withColumn('is_stucked', when(col('attempt')>20, F.lit(1)).otherwise(0))
-            .withColumn('is_super_stucked', when(col('attempt')>40, F.lit(1)).otherwise(0))
-            .groupBy("event_user", "abgroup", "n_day")
-            .agg(
-                    F.count('*').alias('attempts'),
-                    F.sum("coins_spent").alias("coins_spent"),
-                    F.sum("coins_spent_additional_moves").alias("coins_spent_additional_moves"),
-                    F.sum("coins_spent_inlevelboosters").alias("coins_spent_inlevelboosters"),
-                    F.sum("coins_spent_startboosters").alias("coins_spent_startboosters"),
-                    F.sum("real_coins_spent").alias("real_coins_spent"),
-                    F.sum("real_coins_spent_additional_moves").alias("real_coins_spent_additional_moves"),
-                    F.sum("real_coins_spent_inlevelboosters").alias("real_coins_spent_inlevelboosters"),
-                    F.sum("real_coins_spent_startboosters").alias("real_coins_spent_startboosters"),
-                    F.sum("pre_boosters").alias("pre_boosters"),
-                    F.sum("in_boosters").alias("in_boosters"),
-                    F.sum("is_streak").alias("cnt_streak"),
-                    F.sum("is_win").alias("wins"),
-                    F.sum("is_superball").alias("cnt_superball"),
-                    F.sum("coins_spent_1att").alias("coins_spent_1att"),
-                    F.sum("coins_spent_2plus_att").alias("coins_spent_2plus_att"),
-                    F.sum("coins_spent_superball").alias("coins_spent_superball"),
-                    F.sum("real_coins_spent_1att").alias("real_coins_spent_1att"),
-                    F.sum("real_coins_spent_2plus_att").alias("real_coins_spent_2plus_att"),
-                    F.sum("real_coins_spent_superball").alias("real_coins_spent_superball"),
-                    F.sum("is_lose_sb").alias("cnt_lose_sb"),
-                    F.sum("is_get_sb").alias("cnt_get_sb"),
-                    F.max("churn_m3").alias("churn_m3"),
-                    F.max("churn_m3_win").alias("churn_m3_win"),
-                    F.max("churn_m3_lose").alias("churn_m3_lose"),
-                    F.max("is_5plus_ws").alias("is_5plus_ws"),
-                    F.max("is_10plus_ws").alias("is_10plus_ws"),
-                    F.max("is_20plus_ws").alias("is_20plus_ws"),
-                    F.max("is_40plus_ws").alias("is_40plus_ws"),
-                    F.max("is_lose_sb").alias("is_lose_sb"),
-                    F.max("is_get_sb").alias("is_get_sb"),
-                    F.max("is_stucked").alias("is_stucked"),
-                    F.max("is_super_stucked").alias("is_super_stucked"),
-                    F.max("is_streak").alias("is_streak"),
-                    F.max("is_superball").alias("is_superball")
-            )
+        atts.withColumn('next_att_time', F.lead('client_time').over(windowUserAsc))
+        .withColumn('timediff_att', F.datediff(col('next_att_time'), col('client_time')))
+        .withColumn(
+            'churn_m3',
+            when((col('timediff_att') < 7) | (col('date_attempt') > end_date - datetime.timedelta(days=7)), 0).otherwise(1),
+        )
+        .withColumn('churn_m3_win', when(col('is_win') == 1, col('churn_m3')).otherwise(0))
+        .withColumn('churn_m3_lose', when(col('is_win') == 0, col('churn_m3')).otherwise(0))
+        .withColumn('prev_levels_winstreak', F.lag('levels_winstreak').over(windowUserAsc))
+        .fillna({'prev_levels_winstreak': 0})
+        .withColumn('is_5plus_ws', when(col('prev_levels_winstreak') > 4, 1).otherwise(0))
+        .withColumn('is_10plus_ws', when(col('prev_levels_winstreak') > 9, 1).otherwise(0))
+        .withColumn('is_20plus_ws', when(col('prev_levels_winstreak') > 19, 1).otherwise(0))
+        .withColumn('is_40plus_ws', when(col('prev_levels_winstreak') > 39, 1).otherwise(0))
+        .withColumn('is_next_sb', F.lead('is_superball').over(windowUserAsc))
+        .withColumn('is_lose_sb', when(col('is_superball') == 1, col('is_lose')).otherwise(0))
+        .withColumn('is_get_sb', when((col('is_superball') == 0) & (col('is_next_sb') == 1), F.lit(1)).otherwise(0))
+        .withColumn('is_stucked', when(col('attempt') > 20, F.lit(1)).otherwise(0))
+        .withColumn('is_super_stucked', when(col('attempt') > 40, F.lit(1)).otherwise(0))
+        .groupBy('event_user', 'abgroup', 'n_day')
+        .agg(
+            F.count('*').alias('attempts'),
+            F.sum('coins_spent').alias('coins_spent'),
+            F.sum('coins_spent_additional_moves').alias('coins_spent_additional_moves'),
+            F.sum('coins_spent_inlevelboosters').alias('coins_spent_inlevelboosters'),
+            F.sum('coins_spent_startboosters').alias('coins_spent_startboosters'),
+            F.sum('real_coins_spent').alias('real_coins_spent'),
+            F.sum('real_coins_spent_additional_moves').alias('real_coins_spent_additional_moves'),
+            F.sum('real_coins_spent_inlevelboosters').alias('real_coins_spent_inlevelboosters'),
+            F.sum('real_coins_spent_startboosters').alias('real_coins_spent_startboosters'),
+            F.sum('pre_boosters').alias('pre_boosters'),
+            F.sum('in_boosters').alias('in_boosters'),
+            F.sum('is_streak').alias('cnt_streak'),
+            F.sum('is_win').alias('wins'),
+            F.sum('is_superball').alias('cnt_superball'),
+            F.sum('coins_spent_1att').alias('coins_spent_1att'),
+            F.sum('coins_spent_2plus_att').alias('coins_spent_2plus_att'),
+            F.sum('coins_spent_superball').alias('coins_spent_superball'),
+            F.sum('real_coins_spent_1att').alias('real_coins_spent_1att'),
+            F.sum('real_coins_spent_2plus_att').alias('real_coins_spent_2plus_att'),
+            F.sum('real_coins_spent_superball').alias('real_coins_spent_superball'),
+            F.sum('is_lose_sb').alias('cnt_lose_sb'),
+            F.sum('is_get_sb').alias('cnt_get_sb'),
+            F.max('churn_m3').alias('churn_m3'),
+            F.max('churn_m3_win').alias('churn_m3_win'),
+            F.max('churn_m3_lose').alias('churn_m3_lose'),
+            F.max('is_5plus_ws').alias('is_5plus_ws'),
+            F.max('is_10plus_ws').alias('is_10plus_ws'),
+            F.max('is_20plus_ws').alias('is_20plus_ws'),
+            F.max('is_40plus_ws').alias('is_40plus_ws'),
+            F.max('is_lose_sb').alias("is_lose_sb"),
+            F.max('is_get_sb').alias('is_get_sb'),
+            F.max('is_stucked').alias('is_stucked'),
+            F.max('is_super_stucked').alias('is_super_stucked'),
+            F.max('is_streak').alias('is_streak'),
+            F.max('is_superball').alias('is_superball'),
+        )
     )
 
     # делаем кросс таблицу игроков и дней для расчета кумулятивных метрик по каждому игроку (декартово произведение игроков на дни)
@@ -183,27 +266,41 @@ def calc_m3_metrics(start_date, end_date, users, need_calc_attempts, filename_at
     user_days = users.crossJoin(days)
 
     # добавляем в пустую кросстаблицу м3 метрики
-    user_days_df = (
-        user_days
-        .join(df_level_user_day_metrics, ['n_day', 'event_user', 'abgroup'], 'left')
-        .fillna(0)
-    )
+    user_days_df = user_days.join(df_level_user_day_metrics, ['n_day', 'event_user', 'abgroup'], 'left').fillna(0)
 
     # добавляем кумулятивные значения метрик по дням
 
     # ниже все возможные метрики, можно выбрать желаемые, чтобы лишнего не считать и не сохранять
-    #  metrics = ['atempts', 'wins', 'coins_spent', 'coins_spent_additional_moves', 'coins_spent_inlevelboosters', 'coins_spent_startboosters', 'real_coins_spent', 'real_coins_spent_additional_moves', 'real_coins_spent_inlevelboosters', 'real_coins_spent_startboosters', 'pre_boosters', 'in_boosters', 'cnt_streak', 'cnt_win', 'cnt_superball', 'coins_spent_1att', 'coins_spent_2plus_att', 'coins_spent_superball', 'real_coins_spent_1att', 'real_coins_spent_2plus_att', 'real_coins_spent_superball', 'cnt_lose_sb', 'cnt_get_sb', 'churn_m3', 'churn_m3_win', 'churn_m3_lose', 'is_5plus_ws', 'is_10plus_ws', 'is_20plus_ws', 'is_40plus_ws', 'is_lose_sb', 'is_get_sb', 'is_stucked', 'is_super_stucked', 'is_streak', 'is_superball']
+    # metrics = ['atempts', 'wins', 'coins_spent', 'coins_spent_additional_moves', 'coins_spent_inlevelboosters', 'coins_spent_startboosters', 'real_coins_spent', 'real_coins_spent_additional_moves', 'real_coins_spent_inlevelboosters', 'real_coins_spent_startboosters', 'pre_boosters', 'in_boosters', 'cnt_streak', 'cnt_win', 'cnt_superball', 'coins_spent_1att', 'coins_spent_2plus_att', 'coins_spent_superball', 'real_coins_spent_1att', 'real_coins_spent_2plus_att', 'real_coins_spent_superball', 'cnt_lose_sb', 'cnt_get_sb', 'churn_m3', 'churn_m3_win', 'churn_m3_lose', 'is_5plus_ws', 'is_10plus_ws', 'is_20plus_ws', 'is_40plus_ws', 'is_lose_sb', 'is_get_sb', 'is_stucked', 'is_super_stucked', 'is_streak', 'is_superball']
 
-    metrics = ['attempts', 'wins', 'coins_spent', 'real_coins_spent', 'cnt_streak', 'cnt_superball', 'real_coins_spent_1att', 'real_coins_spent_2plus_att', 'real_coins_spent_superball', 'cnt_lose_sb', 'cnt_get_sb', 'churn_m3', 'churn_m3_win', 'churn_m3_lose', 'is_stucked', 'is_super_stucked']
+    metrics = [
+        'attempts',
+        'wins',
+        'coins_spent',
+        'real_coins_spent',
+        'cnt_streak',
+        'cnt_superball',
+        'real_coins_spent_1att',
+        'real_coins_spent_2plus_att',
+        'real_coins_spent_superball',
+        'cnt_lose_sb',
+        'cnt_get_sb',
+        'churn_m3',
+        'churn_m3_win',
+        'churn_m3_lose',
+        'is_stucked',
+        'is_super_stucked',
+    ]
 
     for metric in metrics:
         user_days_df = get_cum_metric(user_days_df, metric)
 
     return user_days_df
 
-def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_attempts=False, filename_attempts='') -> DataFrame:
+
+def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_attempts=False) -> DataFrame:
     """
-    Создание датасета для анализа A/B теста, который будет сохранен во временную таблицу 
+    Создание датасета для анализа A/B теста, который будет сохранен во временную таблицу
 
     Parameters:
     test_config (ResearchConfig): Конфигурация для теста.
@@ -211,174 +308,167 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
     Returns:
     DataFrame: Итоговый датасет для анализа.
     """
-    print('test_config.test_id', test_config.test_id, 'test_config.app_short', test_config.app_short)
-    
-    # Получим всю информацию про тест
-    ab_users = ab_test_users.filter(
-        (F.col("test_id") == test_config.test_id) &
-        (F.col("app_short") == test_config.app_short)
-    )
-    
-    ab_metrics = (
-        ab_test_users_metrics
-        .filter(
-        (F.col("test_id") == test_config.test_id) &
-        (F.col("app_short") == test_config.app_short)
-        )
-        .withColumn('n_day', col('personal_test_participation_day_num'))
-    )
 
-    test_info = (
-        ab_users
-        .select(
-            "test_id",
-            "app_short",
-            "test_start_date",
-            "test_end_date",
-            "enroll_end_date",
-            "feature_start_date",
-            "feature_end_date"
-        )
-        .distinct()
-    )
+    # Получим всю информацию про тест
+    ab_users = ab_test_users.filter((F.col('test_id') == test_config.test_id) & (F.col('app_short') == test_config.app_short))
+
+    ab_metrics = ab_test_users_metrics.filter(
+        (F.col('test_id') == test_config.test_id) & (F.col('app_short') == test_config.app_short)
+    ).withColumn('n_day', col('personal_test_participation_day_num'))
+
+    test_info = ab_users.select(
+        'test_id',
+        'app_short',
+        'test_start_date',
+        'test_end_date',
+        'enroll_end_date',
+        'feature_start_date',
+        'feature_end_date',
+    ).distinct()
 
     # Получение необходимых дат
-    # Возвращается объект типа Row, к которому можно обращаться как к словарю
-    dates = test_info.select("test_start_date", "feature_start_date", "enroll_end_date", "test_end_date").first()
-    start_date_test = dates["test_start_date"]
-    end_date_test = dates["test_end_date"]
-    start_date_feature = dates["feature_start_date"]
-    end_date_enroll = dates["enroll_end_date"]
-
+    # в test_config сохраняются автоматически в мета-данные
+    start_date_test = test_config.get_meta('test_start_date')
+    end_date_test = test_config.get_meta('test_end_date')
+    start_date_feature = test_config.get_meta('feature_start_date')
+    end_date_enroll = test_config.get_meta('enroll_end_date')
 
     # Сегментация по платежеспособности
     # Берем сессии за все даты набора игроков, потом заджоним каждого игрока на дату вступления в тест, чтобы взять актуальные характеристики на момент попадания в тест
     df_users = (
-        sessions
-        .filter(
-            (F.col("partition_date").between(start_date_test, end_date_enroll)) &
-            (F.col("store") == test_config.store)
+        sessions.filter(
+            (F.col('partition_date').between(start_date_test, end_date_enroll)) & (F.col('store') == test_config.store)
         )
         .filter(F.col('session_id') != '-1')
         .withColumn('level', F.get_json_object('user_payload', "$['level']").astype('int'))
         .withColumn('skill', F.get_json_object('user_payload', "$['segment.skill']").astype('float'))
         .withColumn('payment', F.get_json_object('user_payload', "$['segment.payment']").astype('float'))
-        .withColumn('skill_payment'
-                    , F.when(F.col('level') < 100, '0_early_game')
-                    .when(F.col('payment') >= 7.912, '4_super_payers')
-                    .when(F.col('payment') >= 3.575, '3_top_payers')
-                    .when(F.col('payment') >= 1.120, '2_normal_payers')
-                    .when((F.col('payment') > 0) & (F.col('skill') >= 0.829), '1_low_payers_skill_3')
-                    .when((F.col('payment') > 0) & (F.col('skill') >= 0.684), '1_low_payers_skill_2')
-                    .when(F.col('payment') > 0 , '1_low_payers_skill_1')
-                    .when(F.col('skill') >= 0.846, '0_non_payers_skill_3')
-                    .when(F.col('skill') >= 0.736, '0_non_payers_skill_2')
-                    .otherwise('0_non_payers_skill_1')
-                    )
-        .withColumn('skill_payment_seg'
-                    , F.coalesce(F.get_json_object('user_payload', "$['segment.skillpayment']")
-                                , F.col('skill_payment')))
-        .withColumn("payer_type", F.get_json_object("user_payload", "$.payer_type"))
-        .withColumn("skill", 20*F.round(F.col("skill") * 100 /20)) # считаем скилл (фэилрейт) округленный до 20
-        .withColumnRenamed('user_id', 'event_user')
-        .groupBy("event_user", "partition_date")
-        .agg(
-            F.max("payer_type").alias("payer_type"),
-            F.max("skill_payment_seg").alias("skill_payment_seg"),
-            F.max("skill").alias("skill"),
-            F.min("level").alias("level")
+        .withColumn(
+            'skill_payment',
+            F.when(F.col('level') < 100, '0_early_game')
+            .when(F.col('payment') >= 7.912, '4_super_payers')
+            .when(F.col('payment') >= 3.575, '3_top_payers')
+            .when(F.col('payment') >= 1.120, '2_normal_payers')
+            .when((F.col('payment') > 0) & (F.col('skill') >= 0.829), '1_low_payers_skill_3')
+            .when((F.col('payment') > 0) & (F.col('skill') >= 0.684), '1_low_payers_skill_2')
+            .when(F.col('payment') > 0, '1_low_payers_skill_1')
+            .when(F.col('skill') >= 0.846, '0_non_payers_skill_3')
+            .when(F.col('skill') >= 0.736, '0_non_payers_skill_2')
+            .otherwise('0_non_payers_skill_1'),
         )
-        .select("event_user", "skill_payment_seg", "payer_type", "skill", col("partition_date").alias("test_enroll_date"), "level")
+        .withColumn(
+            'skill_payment_seg',
+            F.coalesce(F.get_json_object('user_payload', "$['segment.skillpayment']"), F.col('skill_payment')),
+        )
+        .withColumn('payer_type', F.get_json_object('user_payload', '$.payer_type'))
+        .withColumn('skill', 20 * F.round(F.col('skill') * 100 / 20))  # считаем скилл (фэилрейт) округленный до 20
+        .withColumnRenamed('user_id', 'event_user')
+        .groupBy('event_user', 'partition_date')
+        .agg(
+            F.max('payer_type').alias('payer_type'),
+            F.max('skill_payment_seg').alias('skill_payment_seg'),
+            F.max('skill').alias('skill'),
+            F.min('level').alias('level'),
+        )
+        .select(
+            'event_user', 'skill_payment_seg', 'payer_type', 'skill', col('partition_date').alias('test_enroll_date'), 'level'
+        )
     )
 
     # Игроки теста
     df_test_users = (
-        ab_users
-        .filter(F.col("good_user") == True)
+        ab_users.filter(F.col('good_user') == True)
         # .filter(F.col("is_whale") == False)
         .withColumn('start_feature_user', F.greatest(F.col('test_enroll_date'), F.col('feature_start_date')))
-        .select("test_id", "app_short", "abgroup", "event_user", "metric_calc_start_date", "device_region", F.to_date(col("test_enroll_date")).alias("test_enroll_date"), "start_feature_user")
-        .join(df_users, ["event_user", "test_enroll_date"], "left")
+        .select(
+            'test_id',
+            'app_short',
+            'abgroup',
+            'event_user',
+            'metric_calc_start_date',
+            'device_region',
+            F.to_date(col('test_enroll_date')).alias('test_enroll_date'),
+            'start_feature_user',
+        )
+        .join(df_users, ['event_user', 'test_enroll_date'], 'left')
         .fillna(0)
     )
 
     # Чтобы ускорить вычисления, можно сохранить меньший из df на всех нодах через broadcast
     # Т.к. join'ов будет много и во избежание повторных расчетов (на всякий случай) так же используем cache()
-    users = F.broadcast(df_test_users.select("event_user", "abgroup", "start_feature_user")).persist()
+    users = F.broadcast(df_test_users.select('event_user', 'abgroup', 'start_feature_user')).persist()
 
     # Т.к. PySpark использует Lazy Executions, то нужно вызвать count(), чтобы кэширование действительно произошло
     users.count()
 
     # Метрики монетизации для CUPED
     df_cuped_metrics = (
-        ab_metrics.filter(F.col("metric_name").like("prev_%"))
-        .groupBy("event_user", F.abs(F.col("personal_test_participation_day_num")).alias("n_day"))
-        .agg(
-            F.sum(F.when(F.col("metric_name") == "prev_revenue_cum", F.col("value"))).alias("revenue_before")
-        )
+        ab_metrics.filter(F.col('metric_name').like('prev_%'))
+        .groupBy('event_user', F.abs(F.col('personal_test_participation_day_num')).alias('n_day'))
+        .agg(F.sum(F.when(F.col('metric_name') == 'prev_revenue_cum', F.col('value'))).alias('revenue_before'))
     )
 
     # Основные метрики
     df_main_metrics = (
-        ab_metrics
-        .join(users, "event_user")
-        #.withColumn("n_day", F.datediff("calendar_day", F.lit(start_date_feature)) + 1)
-        #.withColumn('n_day', F.datediff("calendar_day", "test_enroll_date") + 1)
-        .filter(F.col("n_day") > 0)
-        .groupBy("event_user", "n_day")
+        ab_metrics.join(users, 'event_user')
+        # .withColumn('n_day', F.datediff('calendar_day', F.lit(start_date_feature)) + 1)
+        # .withColumn('n_day', F.datediff('calendar_day', 'test_enroll_date') + 1)
+        .filter(F.col('n_day') > 0)
+        .groupBy('event_user', 'n_day')
         .agg(
-            F.sum(F.when(F.col("metric_name") == "revenue", F.col("value"))).alias("revenue"),
-            F.sum(F.when(F.col("metric_name") == "is_payer", F.col("value"))).alias("converted"),
+            F.sum(F.when(F.col('metric_name') == 'revenue', F.col('value'))).alias('revenue'),
+            F.sum(F.when(F.col('metric_name') == 'is_payer', F.col('value'))).alias('converted'),
             # метрики ниже в витрине считаются некорректно
-            #F.sum(F.when(F.col("metric_name") == "game_attempts", F.col("value"))).alias("attempts"), 
-            #F.sum(F.when(F.col("metric_name") == "game_wins", F.col("value"))).alias("wins"),
-            #F.sum(F.when(F.col("metric_name") == "game_attempts_cum", F.col("value"))).alias("attempts_cum"),
-            #F.sum(F.when(F.col("metric_name") == "game_wins_cum", F.col("value"))).alias("wins_cum"),
-            F.sum(F.when(F.col("metric_name") == "revenue_cum", F.col("value"))).alias("revenue_cum"),
-            F.sum(F.when(F.col("metric_name") == "is_payer_cum", F.col("value"))).alias("converted_cum"),
-            F.sum(F.when(F.col("metric_name") == "active", F.col("value"))).alias("retained"),
-            F.sum(F.when(F.col("metric_name") == "weekly_churn", F.col("value"))).alias("churn")
+            # F.sum(F.when(F.col('metric_name') == 'game_attempts', F.col('value'))).alias('attempts'),
+            # F.sum(F.when(F.col('metric_name') == 'game_wins', F.col('value'))).alias('wins'),
+            # F.sum(F.when(F.col('metric_name') == 'game_attempts_cum', F.col('value'))).alias('attempts_cum'),
+            # F.sum(F.when(F.col('metric_name') == 'game_wins_cum', F.col('value'))).alias('wins_cum'),
+            F.sum(F.when(F.col('metric_name') == 'revenue_cum', F.col('value'))).alias('revenue_cum'),
+            F.sum(F.when(F.col('metric_name') == 'is_payer_cum', F.col('value'))).alias('converted_cum'),
+            F.sum(F.when(F.col('metric_name') == 'active', F.col('value'))).alias('retained'),
+            F.sum(F.when(F.col('metric_name') == 'weekly_churn', F.col('value'))).alias('churn'),
         )
     )
 
     # Итоговый результат
     result = (
-        df_test_users
-        .join(df_main_metrics, ["event_user"], "left")
-        .join(df_cuped_metrics, ["event_user", "n_day"], "left")
-        .withColumn("is_payer", F.when(F.col("revenue") > 0, 1).otherwise(0))
+        df_test_users.join(df_main_metrics, ['event_user'], 'left')
+        .join(df_cuped_metrics, ['event_user', 'n_day'], 'left')
+        .withColumn('is_payer', F.when(F.col('revenue') > 0, 1).otherwise(0))
         .withColumn(
-            "revenue_before_d14",
-            F.max("revenue_before").over(Window.partitionBy('event_user').rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing))
+            'revenue_before_d14',
+            F.max('revenue_before').over(
+                Window.partitionBy('event_user').rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+            ),
         )
         .select(
-            "test_id",
-            "app_short",
-            "abgroup",
-            "event_user",
-            "metric_calc_start_date",
-            "device_region",
-            "skill_payment_seg",
-            "payer_type",
-            F.col("skill").cast(IntegerType()),
-            F.col("level").cast(IntegerType()),
-            F.col("is_payer").cast(IntegerType()),
-            F.col("n_day").cast(IntegerType()),
-            F.col("revenue_before").cast(FloatType()),
-            F.col("retained").cast(IntegerType()),
-            F.col("churn").cast(IntegerType()),
-            F.col("revenue_cum").cast(FloatType()),
-            F.col("converted_cum").cast(IntegerType()),
-            #F.col("attempts_cum").cast(IntegerType()),
-            #F.col("wins_cum").cast(IntegerType()),
-            F.col("revenue").cast(FloatType()),
-            F.col("converted").cast(IntegerType()),
-            F.col("revenue_before_d14").cast(FloatType()),
+            'test_id',
+            'app_short',
+            'abgroup',
+            'event_user',
+            'metric_calc_start_date',
+            'device_region',
+            'skill_payment_seg',
+            'payer_type',
+            F.col('skill').cast(IntegerType()),
+            F.col('level').cast(IntegerType()),
+            F.col('is_payer').cast(IntegerType()),
+            F.col('n_day').cast(IntegerType()),
+            F.col('revenue_before').cast(FloatType()),
+            F.col('retained').cast(IntegerType()),
+            F.col('churn').cast(IntegerType()),
+            F.col('revenue_cum').cast(FloatType()),
+            F.col('converted_cum').cast(IntegerType()),
+            # F.col('attempts_cum').cast(IntegerType()),
+            # F.col('wins_cum').cast(IntegerType()),
+            F.col('revenue').cast(FloatType()),
+            F.col('converted').cast(IntegerType()),
+            F.col('revenue_before_d14').cast(FloatType()),
         )
     )
 
     if add_m3_metrics:
-        m3_metrics = calc_m3_metrics(start_date_feature, end_date_test, users, need_calc_attempts, filename_attempts)
-        result = result.join(m3_metrics, ["event_user", "n_day", "abgroup"], "left")
+        m3_metrics = calc_m3_metrics(test_config, start_date_feature, end_date_test, users, need_calc_attempts)
+        result = result.join(m3_metrics, ['event_user', 'n_day', 'abgroup'], 'left')
 
     return result
