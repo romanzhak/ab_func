@@ -46,7 +46,7 @@ def calc_attempts(
         + col('boosts_horizontal_line')
     )
 
-    print('Attempts will be save in file: ', cfg.filename_attempts)
+    print('Attempts will be save in this file: ', cfg.filename_attempts)
 
     for i in range(0, days_between + 1):
         date_i = start_date + datetime.timedelta(days=i)
