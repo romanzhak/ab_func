@@ -1,6 +1,7 @@
 from ..config import ResearchConfig
 from .tools import Source 
 from datetime import date, datetime
+from textwrap import dedent
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
 from pyspark.sql.functions import col, when
@@ -474,4 +475,13 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
         df_result = df_result.join(m3_metrics, ['event_user', 'n_day', 'abgroup'], 'left')
 
     df_result.write.mode('overwrite').option('overwriteSchema', 'true').saveAsTable(database_name)
-    print(f'The dataset was saved in {database_name}.')
+    test_config.add_meta('abtests_metrics_base', database_name)
+    print(
+        dedent(
+            f"""\
+            The dataset was successfully saved in:
+                -> {database_name}
+            Use cfg.get_meta('abtests_metrics_base')
+            """
+        )
+    )
