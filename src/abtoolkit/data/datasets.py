@@ -309,6 +309,8 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
     DataFrame: Итоговый датасет для анализа.
     """
 
+    # database name to store
+    database_name = f'{test_config.dbname}_base_metrics'
     # Получим всю информацию про тест
     ab_users = ab_test_users.filter((F.col('test_id') == test_config.test_id) & (F.col('app_short') == test_config.app_short))
 
@@ -431,7 +433,7 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
     )
 
     # Итоговый результат
-    result = (
+    df_result = (
         df_test_users.join(df_main_metrics, ['event_user'], 'left')
         .join(df_cuped_metrics, ['event_user', 'n_day'], 'left')
         .withColumn('is_payer', F.when(F.col('revenue') > 0, 1).otherwise(0))
@@ -469,6 +471,7 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
 
     if add_m3_metrics:
         m3_metrics = calc_m3_metrics(test_config, start_date_feature, end_date_test, users, need_calc_attempts)
-        result = result.join(m3_metrics, ['event_user', 'n_day', 'abgroup'], 'left')
+        df_result = df_result.join(m3_metrics, ['event_user', 'n_day', 'abgroup'], 'left')
 
-    return result
+    df_result.write.mode('overwrite').option('overwriteSchema', 'true').saveAsTable(database_name)
+    print(f'The dataset was saved in {database_name}.')

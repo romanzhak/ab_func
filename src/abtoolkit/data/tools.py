@@ -42,7 +42,7 @@ class Source(str, Enum):
         """Print each data source in a multi‑line compact form."""
         for member in cls:
             ds = member._ds()
-            print(f'{member.name.lower()}:')
+            print(f'{member.name}:')
             print(f'  path: {ds.path}')
             if ds.description:
                 print(f'  desc: {ds.description}')
