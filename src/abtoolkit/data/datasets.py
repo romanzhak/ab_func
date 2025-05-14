@@ -775,4 +775,6 @@ def prepare_streak_metrics(cfg: ResearchConfig) -> DataFrame:
 __all__ = [
     'create_dataset',
     'prepare_base_metrics',
+    'prepare_m3_metrics',
+    'prepare_streak_metrics',
 ]
