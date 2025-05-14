@@ -504,7 +504,7 @@ def prepare_base_metrics(cfg: ResearchConfig) -> DataFrame:
     -------
     DataFrame
         ==============  ================================================================
-        Column          How
+        Column          Definition
         --------------  ------------------------------------------------
         total_users     ``countDistinct(event_user)``
         retained_users  ``sum(retained)``
@@ -557,6 +557,220 @@ def prepare_base_metrics(cfg: ResearchConfig) -> DataFrame:
     )
     return df_base
 
+def prepare_m3_metrics(cfg: ResearchConfig) -> DataFrame:
+    """
+    Build **“M3” game-core metrics** aggregated by A/B group and day.
+
+    The input table is read from the path stored under
+    ``cfg.get_meta("abtests_metrics_base")`` and must already contain per-user
+    daily columns listed below.
+    Output has one row per ``(abgroup, n_day)`` and the following columns
+    (metrics derived with a *daily* prefix are computed per retained user).
+
+    Parameters
+    ----------
+    cfg :
+        Active :class:`~abtoolkit.config.ResearchConfig`.  Must have
+        ``meta['abtests_metrics_base']`` pointing to the source Spark table.
+
+    Returns
+    -------
+    DataFrame
+        ========= ================================================================
+        Column      Definition
+        ---------   -------------------------------------------------------------
+        total_users ``countDistinct(event_user)``
+        retained_users ``sum(retained)``
+        sum_attempts ``sum(attempts)``
+        sum_wins   ``sum(wins)``
+        cum_attempts   ``mean(cum_user_attempts)``
+        cum_wins       ``mean(cum_user_wins)``
+        cum_coins_spent            ``mean(cum_user_coins_spent)``
+        cum_real_coins_spent       ``mean(cum_user_real_coins_spent)``
+        cum_real_coins_spent_1att  ``mean(cum_user_real_coins_spent_1att)``
+        cum_real_coins_spent_2plus_att ``mean(cum_user_real_coins_spent_2plus_att)``
+        cum_real_coins_spent_superball ``mean(cum_user_real_coins_spent_superball)``
+        sum_churn_m3          ``sum(churn_m3)``
+        sum_churn_m3_lose     ``sum(churn_m3_lose)``
+        sum_churn_m3_win      ``sum(churn_m3_win)``
+        is_stucked            ``sum(is_stucked)``
+        is_super_stucked      ``sum(is_super_stucked)``
+        coins_spent           ``sum(coins_spent)``
+        real_coins_spent      ``sum(real_coins_spent)``
+        real_coins_spent_1att ``sum(real_coins_spent_1att)``
+        coins_spent_1att      ``sum(coins_spent_1att)``
+        real_coins_spent_2plus_att ``sum(real_coins_spent_2plus_att)``
+        dwins                ``sum_wins / retained_users``
+        dattempts            ``sum_attempts / retained_users``
+        daily_share_stucked          ``is_stucked / retained_users * 100`` (%)
+        daily_share_super_stucked    ``is_super_stucked / retained_users * 100`` (%)
+        daily_coins_spent            ``coins_spent / retained_users``
+        daily_real_coins_spent       ``real_coins_spent / retained_users``
+        daily_real_coins_spent_1att  ``real_coins_spent_1att / retained_users``
+        daily_real_coins_spent_2plus_att ``real_coins_spent_2plus_att / retained_users``
+        daily_churn_m3        ``sum_churn_m3 / retained_users * 100`` (%)
+        daily_churn_m3_lose   ``sum_churn_m3_lose / retained_users * 100`` (%)
+        daily_churn_m3_win    ``sum_churn_m3_win / retained_users * 100`` (%)
+        daily_share_rcoins_1att ``real_coins_spent_1att / real_coins_spent * 100`` (%)
+        daily_share_coins_1att  ``coins_spent_1att / coins_spent * 100`` (%)
+        cum_share_rcoins_1att   ``cum_real_coins_spent_1att / cum_real_coins_spent * 100`` (%)
+        ========= ================================================================
+    """
+    metrics_data = spark.table(cfg.get_meta('abtests_metrics_base'))
+    df_m3 = (
+        metrics_data.groupby('abgroup', 'n_day')
+        .agg(
+            F.countDistinct('event_user').alias('total_users'),
+            F.sum('retained').alias('retained_users'),
+            F.sum('attempts').alias('sum_attempts'),
+            F.sum('wins').alias('sum_wins'),
+            F.mean('cum_user_attempts').alias('cum_attempts'),
+            F.mean('cum_user_wins').alias('cum_wins'),
+            F.mean('cum_user_coins_spent').alias('cum_coins_spent'),
+            F.mean('cum_user_real_coins_spent').alias('cum_real_coins_spent'),
+            F.mean('cum_user_real_coins_spent_1att').alias('cum_real_coins_spent_1att'),
+            # F.mean('cum_user_coins_spent_1att').alias('cum_coins_spent_1att'),
+            F.mean('cum_user_real_coins_spent_2plus_att').alias('cum_real_coins_spent_2plus_att'),
+            F.mean('cum_user_real_coins_spent_superball').alias('cum_real_coins_spent_superball'),
+            # F.mean('cum_user_churn_m3').alias('cum_churn_m3'),
+            # F.mean('cum_user_churn_m3_win').alias('cum_churn_m3_win'),
+            # F.mean('cum_user_churn_m3_lose').alias('cum_churn_m3_lose'),
+            # F.mean('cum_user_is_stucked').alias('cum_is_stucked'),
+            # F.mean('cum_user_is_super_stucked').alias('cum_is_super_stucked'),
+            F.sum('churn_m3').alias('sum_churn_m3'),
+            F.sum('churn_m3_lose').alias('sum_churn_m3_lose'),
+            F.sum('churn_m3_win').alias('sum_churn_m3_win'),
+            F.sum('is_stucked').alias('is_stucked'),
+            F.sum('is_super_stucked').alias('is_super_stucked'),
+            F.sum('coins_spent').alias('coins_spent'),
+            F.sum('real_coins_spent').alias('real_coins_spent'),
+            F.sum('real_coins_spent_1att').alias('real_coins_spent_1att'),
+            F.sum('coins_spent_1att').alias('coins_spent_1att'),
+            F.sum('real_coins_spent_2plus_att').alias('real_coins_spent_2plus_att'),
+        )
+        .withColumn('dwins', F.col('sum_wins') / F.col('retained_users'))
+        .withColumn('dattempts', F.col('sum_attempts') / F.col('retained_users'))
+        .withColumn('daily_share_stucked', 100 * F.col('is_stucked') / F.col('retained_users'))
+        .withColumn('daily_share_super_stucked', 100 * F.col('is_super_stucked') / F.col('retained_users'))
+        .withColumn('daily_coins_spent', F.col('coins_spent') / F.col('retained_users'))
+        .withColumn('daily_real_coins_spent', F.col('real_coins_spent') / F.col('retained_users'))
+        .withColumn('daily_real_coins_spent_1att', F.col('real_coins_spent_1att') / F.col('retained_users'))
+        .withColumn('daily_real_coins_spent_2plus_att', F.col('real_coins_spent_2plus_att') / F.col('retained_users'))
+        .withColumn('daily_churn_m3', 100 * F.col('sum_churn_m3') / F.col('retained_users'))
+        .withColumn('daily_churn_m3_lose', 100 * F.col('sum_churn_m3_lose') / F.col('retained_users'))
+        .withColumn('daily_churn_m3_win', 100 * F.col('sum_churn_m3_win') / F.col('retained_users'))
+        .withColumn('daily_share_rcoins_1att', 100 * F.col('real_coins_spent_1att') / F.col('real_coins_spent'))
+        .withColumn('daily_share_coins_1att', 100 * F.col('coins_spent_1att') / F.col('coins_spent'))
+        .withColumn('cum_share_rcoins_1att', 100 * F.col('cum_real_coins_spent_1att') / F.col('cum_real_coins_spent'))
+        # .withColumn('cum_share_coins_1att', F.col('cum_coins_spent_1att') / F.col('cum_coins_spent'))
+    )
+    return df_m3
+
+def prepare_streak_metrics(cfg: ResearchConfig) -> DataFrame:
+    """
+    Build **“streak / super-ball” engagement metrics** per A/B group and day.
+
+    The source table is read from the path stored in
+    ``cfg.get_meta("abtests_metrics_base")`` and must contain the daily,
+    per-user columns referenced below.  The function returns one aggregated
+    row per ``(abgroup, n_day)`` with the metrics listed later.
+
+    Parameters
+    ----------
+    cfg :
+        Active :class:`~abtoolkit.config.ResearchConfig` instance.
+        Must contain the key ``"abtests_metrics_base"`` in ``cfg.meta``.
+
+    Returns
+    -------
+    DataFrame
+        ========= ================================================================
+        Column     Definition
+        ---------  ---------------------------------------------------------------
+        total_users               ``countDistinct(event_user)``
+        m3_users                  ``sum(is_m3)``
+        sb_users                  ``sum(is_superball)``
+        streak_users              ``sum(is_streak)``
+        lose_sb_users             ``sum(is_lose_sb)``
+        not_sb_not_streak_users   ``sum(is_not_sb_not_streak)``
+        sum_attempts              ``sum(attempts)``
+        coins_spent               ``sum(coins_spent)``
+        real_coins_spent          ``sum(real_coins_spent)``
+        real_coins_spent_1att     ``sum(real_coins_spent_1att)``
+        real_coins_spent_superball ``sum(real_coins_spent_superball)``
+        coins_spent_1att          ``sum(coins_spent_1att)``
+        real_coins_spent_2plus_att ``sum(real_coins_spent_2plus_att)``
+        cum_cnt_superball         ``mean(cum_user_cnt_superball)``
+        cum_cnt_lose_sb           ``mean(cum_user_cnt_lose_sb)``
+        daily_avg_length_sb_streak ``sum(daily_avg_length_sb_streak) / sb_users``
+        is_5plus_ws … is_40plus_ws  cumulative counts of win-streaks ≥ 5/10/20/40
+        share_sb_users            ``sb_users / m3_users * 100`` (%)
+        share_lost_sb_users       ``lose_sb_users / sb_users * 100`` (%)
+        share_not_sb_not_streak   ``not_sb_not_streak_users / m3_users * 100`` (%)
+        share_streak_users        ``streak_users / m3_users * 100`` (%)
+        daily_share_users_5plus_ws   ``is_5plus_ws / m3_users * 100`` (%)
+        daily_share_users_10plus_ws  ``is_10plus_ws / m3_users * 100`` (%)
+        daily_share_users_20plus_ws  ``is_20plus_ws / m3_users * 100`` (%)
+        daily_share_users_40plus_ws  ``is_40plus_ws / m3_users * 100`` (%)
+        daily_share_rcoins_1att      ``real_coins_spent_1att / real_coins_spent * 100`` (%)
+        daily_share_rcoins_superball ``real_coins_spent_superball / real_coins_spent * 100`` (%)
+        daily_share_coins_1att       ``coins_spent_1att / coins_spent * 100`` (%)
+        ========= ================================================================
+    """
+    metrics_data = spark.table(cfg.get_meta('abtests_metrics_base'))
+    df_streak = (
+        metrics_data.withColumn('is_m3', when(col('attempts') > 0, 1).otherwise(0))
+        .withColumn(
+            'is_not_sb_not_streak',
+            when((col('is_superball') == 0) & (col('is_streak') == 0) & (col('is_m3') == 1), 1).otherwise(0),
+        )
+        # .withColumn('cum_delimeter_for_len_streak', when((col('cum_cnt_superball')>0) & (col('cum_cnt_lose_sb')==0), 1).otherwise(col('cum_cnt_lose_sb')))
+        # .withColumn('cum_avg_length_sb_streak', F.col('cum_cnt_superball')/F.col('delimeter_for_len_streak'))
+        .withColumn(
+            'daily_delimeter_for_len_streak',
+            when((col('cnt_superball') > 0) & (col('cnt_lose_sb') == 0), 1).otherwise(col('cnt_lose_sb')),
+        )
+        .withColumn('daily_avg_length_sb_streak', F.col('cnt_superball') / F.col('daily_delimeter_for_len_streak'))
+        .groupby('abgroup', 'n_day')
+        .agg(
+            F.countDistinct('event_user').alias('total_users'),
+            F.sum('is_m3').alias('m3_users'),
+            F.sum('is_superball').alias('sb_users'),
+            F.sum('is_streak').alias('streak_users'),
+            F.sum('is_lose_sb').alias('lose_sb_users'),
+            F.sum('is_not_sb_not_streak').alias('not_sb_not_streak_users'),
+            F.sum('attempts').alias('sum_attempts'),
+            F.sum('coins_spent').alias('coins_spent'),
+            F.sum('real_coins_spent').alias('real_coins_spent'),
+            F.sum('real_coins_spent_1att').alias('real_coins_spent_1att'),
+            F.sum('real_coins_spent_superball').alias('real_coins_spent_superball'),
+            F.sum('coins_spent_1att').alias('coins_spent_1att'),
+            F.sum('real_coins_spent_2plus_att').alias('real_coins_spent_2plus_att'),
+            F.mean('cum_user_cnt_superball').alias('cum_cnt_superball'),
+            F.mean('cum_user_cnt_lose_sb').alias('cum_cnt_lose_sb'),
+            F.mean('cum_user_cnt_superball').alias('cum_cnt_superball'),
+            F.mean('cum_user_cnt_lose_sb').alias('cum_cnt_lose_sb'),
+            # F.sum('cum_avg_length_sb_streak').alias('cum_avg_length_sb_streak'),
+            F.sum('daily_avg_length_sb_streak').alias('daily_avg_length_sb_streak'),
+            F.sum('is_5plus_ws').alias('is_5plus_ws'),
+            F.sum('is_10plus_ws').alias('is_10plus_ws'),
+            F.sum('is_20plus_ws').alias('is_20plus_ws'),
+            F.sum('is_40plus_ws').alias('is_40plus_ws'),
+        )
+        .withColumn('share_sb_users', 100 * F.col('sb_users') / F.col('m3_users'))
+        .withColumn('share_lost_sb_users', 100 * F.col('lose_sb_users') / F.col('sb_users'))
+        .withColumn('share_not_sb_not_streak', 100 * F.col('not_sb_not_streak_users') / F.col('m3_users'))
+        .withColumn('share_streak_users', 100 * F.col('streak_users') / F.col('m3_users'))
+        .withColumn('daily_avg_length_sb_streak', F.col('daily_avg_length_sb_streak') / F.col('sb_users'))
+        .withColumn('daily_share_users_5plus_ws', 100 * F.col('is_5plus_ws') / F.col('m3_users'))
+        .withColumn('daily_share_users_10plus_ws', 100 * F.col('is_10plus_ws') / F.col('m3_users'))
+        .withColumn('daily_share_users_20plus_ws', 100 * F.col('is_20plus_ws') / F.col('m3_users'))
+        .withColumn('daily_share_users_40plus_ws', 100 * F.col('is_40plus_ws') / F.col('m3_users'))
+        .withColumn('daily_share_rcoins_1att', 100 * F.col('real_coins_spent_1att') / F.col('real_coins_spent'))
+        .withColumn('daily_share_rcoins_superball', 100 * F.col('real_coins_spent_superball') / F.col('real_coins_spent'))
+        .withColumn('daily_share_coins_1att', 100 * F.col('coins_spent_1att') / F.col('coins_spent'))
+    )
+    return df_streak
 
 __all__ = [
     'create_dataset',
