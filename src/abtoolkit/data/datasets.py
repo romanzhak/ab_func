@@ -496,7 +496,7 @@ def prepare_base_metrics(cfg: ResearchConfig) -> DataFrame:
     Parameters
     ----------
     cfg :
-        Active :class:`~abtoolkit.config.ResearchConfig`.  
+        Active :class:`~abtoolkit.config.ResearchConfig`.
         In ``cfg.meta`` it must hold the key ``"abtests_metrics_base"`` with
         the fully-qualified Spark table name.
 
@@ -525,36 +525,38 @@ def prepare_base_metrics(cfg: ResearchConfig) -> DataFrame:
 
     """
     metrics_data = spark.table(cfg.get_meta('abtests_metrics_base'))
-    df_base = (metrics_data
-              .groupby('abgroup','n_day')
-              .agg(F.countDistinct('event_user').alias('total_users'),
-                   F.sum('retained').alias('retained_users'),
-                   F.sum('churn').alias('churned_users'),
-                   F.sum('converted_cum').alias('converted_users'),
-                   F.countDistinct(F.when(F.col('revenue')>0, F.col('event_user'))).alias('paying_users'),
-                   F.sum('revenue_cum').alias('revenue_cum'),
-                   F.sum('revenue').alias('revenue'),
-                   #F.mean('attempts_cum').alias('attempts_mean'),
-                   #F.mean('attempts').alias('attempts'),
-                   #F.mean('wins_cum').alias('wins_mean'),
-                   #F.mean('wins').alias('wins'),
-                   #F.sum('attempts').alias('sum_attempts'),
-                   #F.sum('wins').alias('sum_wins'),
-                   #F.mean('cum_user_attempts').alias('cum_attempts'),
-                   #F.mean('cum_user_wins').alias('cum_wins')
-                )
-                .withColumn('arpu', F.col('revenue_cum') / F.col('total_users'))
-                .withColumn('arppu', F.col('revenue_cum') / F.col('converted_users'))
-                #.withColumn('dwins', F.col('sum_wins') / F.col('retained_users'))
-                #.withColumn('dattempts', F.col('sum_attempts') / F.col('retained_users'))
-                .withColumn('darpu', F.col('revenue') / F.col('retained_users'))
-                .withColumn('darppu', F.col('revenue') / F.col('paying_users'))
-                .withColumn('conversion', F.round(F.col('converted_users') / F.col('total_users') * 100,2))
-                .withColumn('paying_share', F.round(F.col('paying_users') / F.col('retained_users') * 100,2))
-                .withColumn('retention', F.round(F.col('retained_users') / F.col('total_users') * 100,2))
-                .withColumn('churn', F.round(F.col('churned_users') / F.col('total_users') * 100,2))
-      )
+    df_base = (
+        metrics_data.groupby('abgroup', 'n_day')
+        .agg(
+            F.countDistinct('event_user').alias('total_users'),
+            F.sum('retained').alias('retained_users'),
+            F.sum('churn').alias('churned_users'),
+            F.sum('converted_cum').alias('converted_users'),
+            F.countDistinct(F.when(F.col('revenue') > 0, F.col('event_user'))).alias('paying_users'),
+            F.sum('revenue_cum').alias('revenue_cum'),
+            F.sum('revenue').alias('revenue'),
+            # F.mean('attempts_cum').alias('attempts_mean'),
+            # F.mean('attempts').alias('attempts'),
+            # F.mean('wins_cum').alias('wins_mean'),
+            # F.mean('wins').alias('wins'),
+            # F.sum('attempts').alias('sum_attempts'),
+            # F.sum('wins').alias('sum_wins'),
+            # F.mean('cum_user_attempts').alias('cum_attempts'),
+            # F.mean('cum_user_wins').alias('cum_wins')
+        )
+        .withColumn('arpu', F.col('revenue_cum') / F.col('total_users'))
+        .withColumn('arppu', F.col('revenue_cum') / F.col('converted_users'))
+        # .withColumn('dwins', F.col('sum_wins') / F.col('retained_users'))
+        # .withColumn('dattempts', F.col('sum_attempts') / F.col('retained_users'))
+        .withColumn('darpu', F.col('revenue') / F.col('retained_users'))
+        .withColumn('darppu', F.col('revenue') / F.col('paying_users'))
+        .withColumn('conversion', F.round(F.col('converted_users') / F.col('total_users') * 100, 2))
+        .withColumn('paying_share', F.round(F.col('paying_users') / F.col('retained_users') * 100, 2))
+        .withColumn('retention', F.round(F.col('retained_users') / F.col('total_users') * 100, 2))
+        .withColumn('churn', F.round(F.col('churned_users') / F.col('total_users') * 100, 2))
+    )
     return df_base
+
 
 __all__ = [
     'create_dataset',
