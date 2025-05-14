@@ -1,6 +1,6 @@
 from ..config import ResearchConfig
 from .tools import Source 
-from datetime import date, datetime
+from datetime import date, timedelta
 from textwrap import dedent
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
@@ -50,7 +50,7 @@ def calc_attempts(
     print('Attempts will be save in this file: ', cfg.filename_attempts)
 
     for i in range(0, days_between + 1):
-        date_i = start_date + datetime.timedelta(days=i)
+        date_i = start_date + timedelta(days=i)
         date_i_str = date_i.strftime('%Y-%m-%d')
         print('Calculating attempts: DAY', i, ' FROM ', days_between, date_i_str)
         levels_filtered = all_levels.filter((F.col('partition_date').between(date_i_str, date_i_str))).withColumnRenamed(
@@ -207,7 +207,7 @@ def calc_m3_metrics(
         .withColumn('timediff_att', F.datediff(col('next_att_time'), col('client_time')))
         .withColumn(
             'churn_m3',
-            when((col('timediff_att') < 7) | (col('date_attempt') > end_date - datetime.timedelta(days=7)), 0).otherwise(1),
+            when((col('timediff_att') < 7) | (col('date_attempt') > end_date - timedelta(days=7)), 0).otherwise(1),
         )
         .withColumn('churn_m3_win', when(col('is_win') == 1, col('churn_m3')).otherwise(0))
         .withColumn('churn_m3_lose', when(col('is_win') == 0, col('churn_m3')).otherwise(0))
