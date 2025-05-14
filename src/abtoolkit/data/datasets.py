@@ -152,7 +152,7 @@ def calc_attempts(
             )
             .filter(col('n_day') > 0)
         )
-        df_attempts.write.mode('append').saveAsTable(cfg.filename_attempts)
+        df_attempts.write.mode('append').saveAsTable(cfg.filename_attempts) # clean?
     print('CALCULATING ATTEMPTS FINISHED', cfg.filename_attempts)
 
 
@@ -196,7 +196,7 @@ def calc_m3_metrics(
     """
 
     if need_calc_attempts:
-        calc_attempts(start_date, end_date, users, cfg.filename_attempts)
+        calc_attempts(cfg, start_date, end_date, users)
 
     # считаем метрики с группировкой по USER, DAY
     windowUserAsc = Window.partitionBy('event_user').orderBy('client_time')
