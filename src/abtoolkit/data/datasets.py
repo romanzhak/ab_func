@@ -555,3 +555,8 @@ def prepare_base_metrics(cfg: ResearchConfig) -> DataFrame:
                 .withColumn('churn', F.round(F.col('churned_users') / F.col('total_users') * 100,2))
       )
     return df_base
+
+__all__ = [
+    'create_dataset',
+    'prepare_base_metrics',
+]
