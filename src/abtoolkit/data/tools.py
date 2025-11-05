@@ -1,4 +1,4 @@
-from .datasources import REFERENCE_SOURCES, DataSource
+from abtoolkit.data.datasources import REFERENCE_SOURCES, DataSource
 from enum import Enum
 
 class Source(str, Enum):

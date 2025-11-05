@@ -1,5 +1,5 @@
-from ..config import ResearchConfig
-from .tools import Source 
+from abtoolkit.config import ResearchConfig
+from abtoolkit.data.tools import Source 
 from datetime import date, timedelta
 from textwrap import dedent
 from pyspark.sql import DataFrame
@@ -47,11 +47,12 @@ def calc_attempts(
         + col('boosts_horizontal_line')
     )
 
-    print('Attempts will be save in this file: ', cfg.filename_attempts)
+    print('Attempts will be saved in this file: ', cfg.filename_attempts)
 
     for i in range(0, days_between + 1):
         date_i = start_date + timedelta(days=i)
         date_i_str = date_i.strftime('%Y-%m-%d')
+
         print('Calculating attempts: DAY', i, ' FROM ', days_between, date_i_str)
         levels_filtered = all_levels.filter((F.col('partition_date').between(date_i_str, date_i_str))).withColumnRenamed(
             'user_id', 'event_user'
@@ -60,18 +61,18 @@ def calc_attempts(
         df_attempts = (
             users.join(levels_filtered, ['event_user'], 'inner')
             .withColumn('n_day', F.datediff(col('partition_date'), col('start_feature_user')) + 1)
-            .withColumn('coins_spent', F.get_json_object('event_payload', '$.coins_spent'))
-            .withColumn('coins_spent_additional_moves', F.get_json_object('event_payload', '$.coins_spent_additional_moves'))
-            .withColumn('coins_spent_inlevelboosters', F.get_json_object('event_payload', '$.coins_spent_inlevelboosters'))
-            .withColumn('coins_spent_startboosters', F.get_json_object('event_payload', '$.coins_spent_startboosters'))
-            .withColumn('real_coins_spent', F.get_json_object('event_payload', '$.real_coins_spent'))
+            .withColumn('coins_spent', F.get_json_object('event_payload', '$.coins_spent').cast('int'))
+            .withColumn('coins_spent_additional_moves', F.get_json_object('event_payload', '$.coins_spent_additional_moves').cast('int'))
+            .withColumn('coins_spent_inlevelboosters', F.get_json_object('event_payload', '$.coins_spent_inlevelboosters').cast('int'))
+            .withColumn('coins_spent_startboosters', F.get_json_object('event_payload', '$.coins_spent_startboosters').cast('int'))
+            .withColumn('real_coins_spent', F.get_json_object('event_payload', '$.real_coins_spent').cast('int'))
             .withColumn(
-                'real_coins_spent_additional_moves', F.get_json_object('event_payload', '$.real_coins_spent_additional_moves')
+                'real_coins_spent_additional_moves', F.get_json_object('event_payload', '$.real_coins_spent_additional_moves').cast('int')
             )
             .withColumn(
-                'real_coins_spent_inlevelboosters', F.get_json_object('event_payload', '$.real_coins_spent_inlevelboosters')
+                'real_coins_spent_inlevelboosters', F.get_json_object('event_payload', '$.real_coins_spent_inlevelboosters').cast('int')
             )
-            .withColumn('real_coins_spent_startboosters', F.get_json_object('event_payload', '$.real_coins_spent_startboosters'))
+            .withColumn('real_coins_spent_startboosters', F.get_json_object('event_payload', '$.real_coins_spent_startboosters').cast('int'))
             .withColumn('boosts_aircraft', when(F.get_json_object('event_payload', '$.boosts_aircraft') == True, 1).otherwise(0))
             .withColumn(
                 'boosts_bomb_rocket', when(F.get_json_object('event_payload', '$.boosts_bomb_rocket') == True, 1).otherwise(0)
@@ -96,24 +97,24 @@ def calc_attempts(
             .withColumn('boosts_reshuffle', F.get_json_object('event_payload', '$.boosts_reshuffle'))
             .withColumn('boosts_vertical_line', F.get_json_object('event_payload', '$.boosts_vertical_line'))
             .withColumn('boosts_horizontal_line', F.get_json_object('event_payload', '$.boosts_horizontal_line'))
-            .withColumn('pre_boosters', pre_boosters)
-            .withColumn('in_boosters', in_boosters)
-            .withColumn('mortas_helmets', F.get_json_object('event_payload', '$.mortas_helmets'))
-            .withColumn('is_streak', when(col('mortas_helmets') == 3, 1).otherwise(0))
-            .withColumn('influence', when(col('influence') == True, 1).otherwise(0))
-            .withColumn('is_win', when(col('reason') == 'completed', 1).otherwise(0))
+            .withColumn('pre_boosters', pre_boosters.cast('int'))
+            .withColumn('in_boosters', in_boosters.cast('int'))
+            .withColumn('mortas_helmets', F.get_json_object('event_payload', '$.mortas_helmets').cast('int'))
+            .withColumn('is_streak', when(col('mortas_helmets') == 3, 1).otherwise(0).cast('int'))
+            .withColumn('influence', when(col('influence') == True, 1).otherwise(0).cast('int'))
+            .withColumn('is_win', when(col('reason') == 'completed', 1).otherwise(0).cast('int'))
             .withColumn('is_lose', 1 - col('is_win'))
             .withColumn(
                 'is_superball', when(F.get_json_object('event_payload', '$.boosts_super_lightning') == True, 1).otherwise(0)
             )
-            .withColumn('coins_spent_1att', F.when(col('attempt') == 1, col('coins_spent')).otherwise(0))
-            .withColumn('coins_spent_2plus_att', F.when(col('attempt') > 1, col('coins_spent')).otherwise(0))
-            .withColumn('coins_spent_superball', F.when(col('is_superball') == 1, col('coins_spent')).otherwise(0))
-            .withColumn('real_coins_spent_1att', F.when(col('attempt') == 1, col('real_coins_spent')).otherwise(0))
-            .withColumn('real_coins_spent_2plus_att', F.when(col('attempt') > 1, col('real_coins_spent')).otherwise(0))
-            .withColumn('real_coins_spent_superball', F.when(col('is_superball') == 1, col('real_coins_spent')).otherwise(0))
-            .withColumn('levels_winstreak', F.get_json_object('event_payload', '$.levels_winstreak'))
-            .withColumn('levels_sb_streak', F.get_json_object('event_payload', '$.levels_sb_streak'))
+            .withColumn('coins_spent_1att', F.when(col('attempt') == 1, col('coins_spent')).otherwise(0).cast('int'))
+            .withColumn('coins_spent_2plus_att', F.when(col('attempt') > 1, col('coins_spent')).otherwise(0).cast('int'))
+            .withColumn('coins_spent_superball', F.when(col('is_superball') == 1, col('coins_spent')).otherwise(0).cast('int'))
+            .withColumn('real_coins_spent_1att', F.when(col('attempt') == 1, col('real_coins_spent')).otherwise(0).cast('int'))
+            .withColumn('real_coins_spent_2plus_att', F.when(col('attempt') > 1, col('real_coins_spent')).otherwise(0).cast('int'))
+            .withColumn('real_coins_spent_superball', F.when(col('is_superball') == 1, col('real_coins_spent')).otherwise(0).cast('int'))
+            .withColumn('levels_winstreak', F.get_json_object('event_payload', '$.levels_winstreak').cast('int'))
+            .withColumn('levels_sb_streak', F.get_json_object('event_payload', '$.levels_sb_streak').cast('int'))
             .select(
                 'event_user',
                 'abgroup',
@@ -152,6 +153,7 @@ def calc_attempts(
             )
             .filter(col('n_day') > 0)
         )
+
         df_attempts.write.mode('append').saveAsTable(cfg.filename_attempts) # clean?
     print('CALCULATING ATTEMPTS FINISHED', cfg.filename_attempts)
 
@@ -180,6 +182,7 @@ def get_cum_metric(user_days_df: DataFrame, metric: str) -> DataFrame:
         df = user_days_df.withColumn('cum_user_' + metric, F.max(metric).over(windowCumUserDay))
     else:
         df = user_days_df.withColumn('cum_user_' + metric, F.sum(metric).over(windowCumUserDay))
+
     return df
 
 def calc_m3_metrics(
@@ -313,11 +316,16 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
     # database name to store
     database_name = f'{test_config.dbname}_base_metrics'
     # Получим всю информацию про тест
+
     ab_users = ab_test_users.filter((F.col('test_id') == test_config.test_id) & (F.col('app_short') == test_config.app_short))
 
-    ab_metrics = ab_test_users_metrics.filter(
+    ab_metrics = (
+        ab_test_users_metrics.filter(
         (F.col('test_id') == test_config.test_id) & (F.col('app_short') == test_config.app_short)
-    ).withColumn('n_day', col('personal_test_participation_day_num'))
+            )
+        .withColumn('n_day', col('personal_test_participation_day_num'))
+        .withColumn('date', F.col('calendar_day'))
+    )
 
     test_info = ab_users.select(
         'test_id',
@@ -406,9 +414,17 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
 
     # Метрики монетизации для CUPED
     df_cuped_metrics = (
-        ab_metrics.filter(F.col('metric_name').like('prev_%'))
-        .groupBy('event_user', F.abs(F.col('personal_test_participation_day_num')).alias('n_day'))
+        ab_metrics
+        .groupBy('event_user', F.col('personal_test_participation_day_num'))
         .agg(F.sum(F.when(F.col('metric_name') == 'prev_revenue_cum', F.col('value'))).alias('revenue_before'))
+        .withColumn(
+            'revenue_before_d14',
+            F.max('revenue_before').over(
+                Window.partitionBy('event_user').rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+            )
+        )
+        .select('event_user', 'revenue_before_d14')
+        .distinct()
     )
 
     # Основные метрики
@@ -417,7 +433,7 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
         # .withColumn('n_day', F.datediff('calendar_day', F.lit(start_date_feature)) + 1)
         # .withColumn('n_day', F.datediff('calendar_day', 'test_enroll_date') + 1)
         .filter(F.col('n_day') > 0)
-        .groupBy('event_user', 'n_day')
+        .groupBy('event_user', 'n_day', 'date')
         .agg(
             F.sum(F.when(F.col('metric_name') == 'revenue', F.col('value'))).alias('revenue'),
             F.sum(F.when(F.col('metric_name') == 'is_payer', F.col('value'))).alias('converted'),
@@ -436,14 +452,10 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
     # Итоговый результат
     df_result = (
         df_test_users.join(df_main_metrics, ['event_user'], 'left')
-        .join(df_cuped_metrics, ['event_user', 'n_day'], 'left')
+        .join(df_cuped_metrics, ['event_user'], 'left')
         .withColumn('is_payer', F.when(F.col('revenue') > 0, 1).otherwise(0))
-        .withColumn(
-            'revenue_before_d14',
-            F.max('revenue_before').over(
-                Window.partitionBy('event_user').rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
-            ),
-        )
+        .withColumn('calendar_day', F.datediff('date', F.lit(start_date_feature)) + 1)
+        
         .select(
             'test_id',
             'app_short',
@@ -453,11 +465,11 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
             'device_region',
             'skill_payment_seg',
             'payer_type',
+            F.col('calendar_day').cast(IntegerType()),
             F.col('skill').cast(IntegerType()),
             F.col('level').cast(IntegerType()),
             F.col('is_payer').cast(IntegerType()),
             F.col('n_day').cast(IntegerType()),
-            F.col('revenue_before').cast(FloatType()),
             F.col('retained').cast(IntegerType()),
             F.col('churn').cast(IntegerType()),
             F.col('revenue_cum').cast(FloatType()),
@@ -472,9 +484,24 @@ def create_dataset(test_config: ResearchConfig, add_m3_metrics=False, need_calc_
 
     if add_m3_metrics:
         m3_metrics = calc_m3_metrics(test_config, start_date_feature, end_date_test, users, need_calc_attempts)
-        df_result = df_result.join(m3_metrics, ['event_user', 'n_day', 'abgroup'], 'left')
+        df_result = (
+            df_result
+            .join(m3_metrics, ['event_user', 'n_day', 'abgroup'], 'left')
+            .withColumn('is_m3', when(col('attempts') > 0, 1).otherwise(0))
+            .withColumn(
+                'is_not_sb_not_streak',
+                when((col('is_superball') == 0) & (col('is_streak') == 0) & (col('is_m3') == 1), 1).otherwise(0),
+            )
+            .withColumn(
+                'daily_delimeter_for_len_streak',
+                when((col('cnt_superball') > 0) & (col('cnt_lose_sb') == 0), 1).otherwise(col('cnt_lose_sb')),
+            )
+            .withColumn('daily_avg_length_sb_streak', F.col('cnt_superball') / F.col('daily_delimeter_for_len_streak'))
+        ).fillna(0)
 
-    df_result.write.mode('overwrite').option('overwriteSchema', 'true').saveAsTable(database_name)
+    df_result = df_result.withColumnRenamed('n_day', 'personal_day')
+
+    df_result.write.mode('overwrite').saveAsTable(database_name)
     test_config.add_meta('abtests_metrics_base', database_name)
     print(
         dedent(
@@ -513,6 +540,7 @@ def prepare_base_metrics(cfg: ResearchConfig) -> DataFrame:
         paying_users    ``countDistinct(when(revenue>0, event_user))``
         revenue_cum     ``sum(revenue_cum)``
         revenue         ``sum(revenue)``
+
         arpu            ``revenue_cum / total_users``
         arppu           ``revenue_cum / converted_users``
         darpu           ``revenue      / retained_users``
@@ -719,7 +747,8 @@ def prepare_streak_metrics(cfg: ResearchConfig) -> DataFrame:
     """
     metrics_data = spark.table(cfg.get_meta('abtests_metrics_base'))
     df_streak = (
-        metrics_data.withColumn('is_m3', when(col('attempts') > 0, 1).otherwise(0))
+        metrics_data
+        .withColumn('is_m3', when(col('attempts') > 0, 1).otherwise(0))
         .withColumn(
             'is_not_sb_not_streak',
             when((col('is_superball') == 0) & (col('is_streak') == 0) & (col('is_m3') == 1), 1).otherwise(0),
@@ -728,7 +757,7 @@ def prepare_streak_metrics(cfg: ResearchConfig) -> DataFrame:
         # .withColumn('cum_avg_length_sb_streak', F.col('cum_cnt_superball')/F.col('delimeter_for_len_streak'))
         .withColumn(
             'daily_delimeter_for_len_streak',
-            when((col('cnt_superball') > 0) & (col('cnt_lose_sb') == 0), 1).otherwise(col('cnt_lose_sb')),
+            when((col('cnt_superball') > 0) & (col('cnt_lose_sb') == 0), 1).when((col('cnt_lose_sb') > 0), col('cnt_lose_sb')).otherwise(1),
         )
         .withColumn('daily_avg_length_sb_streak', F.col('cnt_superball') / F.col('daily_delimeter_for_len_streak'))
         .groupby('abgroup', 'n_day')
@@ -776,5 +805,5 @@ __all__ = [
     'create_dataset',
     'prepare_base_metrics',
     'prepare_m3_metrics',
-    'prepare_streak_metrics',
+    'prepare_streak_metrics'
 ]
